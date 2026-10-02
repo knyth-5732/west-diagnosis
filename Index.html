@@ -1,0 +1,222 @@
+
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WEST｜16タイプ議論人格診断</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #10131c;
+  --card: #1b2030;
+  --text: #f2f4fa;
+  --muted: #aab2c5;
+  --accent: #a8b4ff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: system-ui, sans-serif; line-height: 1.7;
+}
+main { max-width: 720px; margin: auto; padding: 24px 16px 56px; }
+h1 { font-size: 2.2rem; letter-spacing: .12em; margin-bottom: 0; }
+h2 { font-size: 1.2rem; }
+p, .muted { color: var(--muted); }
+.card {
+  background: var(--card); padding: 18px; margin: 16px 0;
+  border: 1px solid #353b50; border-radius: 16px;
+}
+.question { margin-bottom: 24px; }
+.question p { color: var(--text); font-weight: 600; }
+label.option {
+  display: block; padding: 12px; margin-top: 8px;
+  border: 1px solid #454c63; border-radius: 10px;
+  cursor: pointer;
+}
+label.option:has(input:checked) {
+  border-color: var(--accent); background: #292f48;
+}
+input { accent-color: var(--accent); }
+button {
+  width: 100%; border: 0; border-radius: 12px; padding: 14px;
+  margin-top: 10px; font: inherit; font-weight: 700;
+  color: #10131c; background: var(--accent); cursor: pointer;
+}
+button.secondary { color: var(--text); background: #343b50; }
+button:focus-visible, label:focus-within {
+  outline: 2px solid white; outline-offset: 3px;
+}
+#result { display: none; }
+.type {
+  font-size: clamp(2.5rem, 12vw, 4rem);
+  font-weight: 800; letter-spacing: .12em; text-align: center;
+}
+footer { font-size: .85rem; margin-top: 32px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p>議論の立ち回りを分析する</p>
+    <h1>WEST</h1>
+    <h2>16タイプ議論人格診断</h2>
+    <p>議論における方法・表現・価値判断・働きかけ方を、
+    4つの軸から整理する試作版です。</p>
+  </header>
+
+  <section id="quiz" class="card">
+    <p id="progress">全8問</p>
+    <form id="form">
+      <div id="questions"></div>
+      <button type="submit">診断結果を見る</button>
+    </form>
+  </section>
+
+  <section id="result" class="card" aria-live="polite">
+    <p>あなたのWESTタイプ</p>
+    <div id="type" class="type"></div>
+    <h2 id="name"></h2>
+    <p id="description"></p>
+    <div id="axes"></div>
+    <button id="copy" type="button">結果をコピー</button>
+    <button id="retry" class="secondary" type="button">もう一度診断する</button>
+  </section>
+
+  <footer>
+    WEST試作版 v0.1。設問・判定・解説は開発中です。
+    この結果は固定的な人格評価ではなく、議論スタイルを
+    考えるための仮説です。
+  </footer>
+</main>
+
+<script>
+// 各軸の左側・右側の意味。
+// 正式なWEST定義に合わせて編集してください。
+const axes = [
+  { key: "method", left: "A", right: "I",
+    title: "方法", meaning: "論証 ↔ 直観" },
+  { key: "expression", left: "R", right: "P",
+    title: "表現", meaning: "修辞 ↔ 平明" },
+  { key: "stance", left: "M", right: "E",
+    title: "第三軸", meaning: "M ↔ E（仮設定）" },
+  { key: "tactic", left: "F", right: "C",
+    title: "第四軸", meaning: "F ↔ C（仮設定）" }
+];
+
+// 仮設問：各軸2問。回答は診断尺度の検証前のサンプルです。
+const questions = [
+  { axis: 0, text: "主張を検討するとき、どちらを重視する？",
+    a: "前提・根拠・推論を順に確かめる",
+    b: "直感的な見通しやパターンをつかむ" },
+  { axis: 0, text: "反論を組み立てるなら？",
+    a: "相手の論理のどこが成立しないか示す",
+    b: "議論全体を見て、核心を直感的につかむ" },
+  { axis: 1, text: "自分の主張を伝えるなら？",
+    a: "比喩・強調・印象的な言い回しを使う",
+    b: "誤解が少ない簡潔な言葉を選ぶ" },
+  { axis: 1, text: "議論で文章を書くときは？",
+    a: "読み手に響く構成や表現も工夫する",
+    b: "余計な装飾を減らし、要点を伝える" },
+  { axis: 2, text: "対立する価値観に直面したら？",
+    a: "自分の道徳的な原則を明確にする",
+    b: "結果や実際の影響を重視する" },
+  { axis: 2, text: "主張を評価するときは？",
+    a: "何が正しい・許されるべきか考える",
+    b: "何が機能し、何を達成できるか考える" },
+  { axis: 3, text: "議論を進めるときは？",
+    a: "強い揺さぶりや大胆な手段も使う",
+    b: "相手との合意や整合性を重視する" },
+  { axis: 3, text: "意見を通すために重視するのは？",
+    a: "場の主導権を取って流れを変える",
+    b: "共有できる基準を作って納得を得る" }
+];
+
+// 16タイプの表示名は、正式なWEST解説に差し替え可能。
+const typeNames = {
+  ARMF: "道徳論者", ARMC: "原則を重視する論者",
+  AREF: "修辞的な論者", AREC: "論理を通す論者",
+  APMF: "道徳的な分析者", APMC: "原則を整理する分析者",
+  APEF: "実践的な分析者", APEC: "鑑定士",
+  IRMF: "直観的な道徳論者", IRMC: "信念を語る演者",
+  IREF: "修辞的な演者", IREC: "物語を紡ぐ演者",
+  IPMF: "信念を守る隠者", IPMC: "原則を守る隠者",
+  IPEF: "実践的な隠者", IPEC: "観察する隠者"
+};
+
+const form = document.querySelector("#form");
+const questionArea = document.querySelector("#questions");
+
+questions.forEach((q, i) => {
+  const field = document.createElement("fieldset");
+  field.className = "question";
+  field.style.border = "0";
+  field.style.padding = "0";
+  field.innerHTML = `
+    <p>${i + 1}. ${q.text}</p>
+    <label class="option">
+      <input required type="radio" name="q${i}" value="left">
+      ${q.a}
+    </label>
+    <label class="option">
+      <input required type="radio" name="q${i}" value="right">
+      ${q.b}
+    </label>`;
+  questionArea.appendChild(field);
+});
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const data = new FormData(form);
+  const scores = [0, 0, 0, 0];
+
+  questions.forEach((q, i) => {
+    if (data.get("q" + i) === "left") scores[q.axis]++;
+    else scores[q.axis]--;
+  });
+
+  // 同点の場合は左側を採用する仮ルール。
+  const code = axes.map((axis, i) =>
+    scores[i] >= 0 ? axis.left : axis.right
+  ).join("");
+
+  document.querySelector("#type").textContent = code;
+  document.querySelector("#name").textContent =
+    typeNames[code] || "WESTタイプ";
+  document.querySelector("#description").textContent =
+    "このコードは各軸の回答傾向を組み合わせたものです。" +
+    "正式なタイプ解説は今後の更新で追加します。";
+
+  document.querySelector("#axes").replaceChildren();
+  axes.forEach((axis, i) => {
+    const p = document.createElement("p");
+    p.textContent = `${axis.title}：${code[i]}（${axis.meaning}）`;
+    document.querySelector("#axes").appendChild(p);
+  });
+
+  document.querySelector("#quiz").style.display = "none";
+  document.querySelector("#result").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+document.querySelector("#retry").addEventListener("click", () => {
+  form.reset();
+  document.querySelector("#result").style.display = "none";
+  document.querySelector("#quiz").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+document.querySelector("#copy").addEventListener("click", async () => {
+  const code = document.querySelector("#type").textContent;
+  const name = document.querySelector("#name").textContent;
+  const text = `WEST診断結果：${code}｜${name}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    document.querySelector("#copy").textContent = "コピーしました";
+  } catch {
+    window.prompt("この結果をコピーしてください", text);
+  }
+});
+</script>
+</body>
+</html>
